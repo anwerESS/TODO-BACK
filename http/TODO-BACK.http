@@ -1,0 +1,296 @@
+@baseUrl = http://localhost:8080
+@notFoundId = 999999
+
+# Run this file from top to bottom with IntelliJ HTTP Client.
+# Warning: the last DELETE requests remove todos from the local H2 database.
+
+### GET /api/todos - list todos
+GET {{baseUrl}}/api/todos
+Accept: application/json
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("response is an array", function () {
+    client.assert(Array.isArray(response.body), "Expected response body to be an array");
+});
+
+client.test("todo items expose expected fields", function () {
+    if (response.body.length === 0) {
+        return;
+    }
+
+    const todo = response.body[0];
+    client.assert(todo.id !== undefined, "Expected id");
+    client.assert(todo.title !== undefined, "Expected title");
+    client.assert(todo.completed !== undefined, "Expected completed");
+    client.assert(todo.createdAt !== undefined, "Expected createdAt");
+    client.assert(todo.updatedAt !== undefined, "Expected updatedAt");
+    client.assert(todo.priority !== undefined, "Expected priority");
+});
+%}
+
+### POST /api/todos - create todo
+POST {{baseUrl}}/api/todos
+Content-Type: application/json
+Accept: application/json
+
+{
+    "title": "IntelliJ todo",
+    "description": "Created from IntelliJ HTTP Client",
+    "completed": false,
+    "priority": "HIGH",
+    "category": "IntelliJ",
+    "dueDate": "2026-05-16T10:00:00Z"
+}
+
+> {%
+client.test("status is 201", function () {
+    client.assert(response.status === 201, "Expected 201, got " + response.status);
+});
+
+const todo = response.body;
+client.global.set("todoId", String(todo.id));
+
+client.test("created todo is valid", function () {
+    client.assert(typeof todo.id === "number", "Expected numeric id");
+    client.assert(todo.title === "IntelliJ todo", "Expected title to be trimmed and returned");
+    client.assert(todo.completed === false, "Expected completed false");
+    client.assert(todo.priority === "HIGH", "Expected HIGH priority");
+    client.assert(todo.category === "IntelliJ", "Expected IntelliJ category");
+});
+
+client.test("location header points to created todo", function () {
+    client.assert(response.headers.valueOf("Location") === "/api/todos/" + todo.id, "Unexpected Location header");
+});
+%}
+
+### GET /api/todos/{id} - get created todo
+GET {{baseUrl}}/api/todos/{{todoId}}
+Accept: application/json
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("response matches requested id", function () {
+    client.assert(String(response.body.id) === client.global.get("todoId"), "Expected response id to match todoId");
+    client.assert(response.body.priority === "HIGH", "Expected HIGH priority");
+});
+%}
+
+### PATCH /api/todos/{id} - update todo
+PATCH {{baseUrl}}/api/todos/{{todoId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+    "title": "IntelliJ todo updated",
+    "description": "Updated from IntelliJ HTTP Client",
+    "completed": false,
+    "priority": "MEDIUM",
+    "category": "IntelliJ Updated",
+    "dueDate": "2026-05-17T10:00:00Z"
+}
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("todo fields are updated", function () {
+    client.assert(String(response.body.id) === client.global.get("todoId"), "Expected response id to match todoId");
+    client.assert(response.body.title === "IntelliJ todo updated", "Expected updated title");
+    client.assert(response.body.completed === false, "Expected completed false");
+    client.assert(response.body.priority === "MEDIUM", "Expected MEDIUM priority");
+    client.assert(response.body.category === "IntelliJ Updated", "Expected updated category");
+    client.assert(response.body.dueDate === "2026-05-17T10:00:00Z", "Expected updated dueDate");
+});
+%}
+
+### PATCH /api/todos/{id}/completed - set completed
+PATCH {{baseUrl}}/api/todos/{{todoId}}/completed
+Content-Type: application/json
+Accept: application/json
+
+{
+    "completed": true
+}
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("completed is true", function () {
+    client.assert(String(response.body.id) === client.global.get("todoId"), "Expected response id to match todoId");
+    client.assert(response.body.completed === true, "Expected completed true");
+});
+%}
+
+### PATCH /api/todos/{id}/toggle - toggle completed
+PATCH {{baseUrl}}/api/todos/{{todoId}}/toggle
+Accept: application/json
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("completed is toggled to false", function () {
+    client.assert(String(response.body.id) === client.global.get("todoId"), "Expected response id to match todoId");
+    client.assert(response.body.completed === false, "Expected completed false after toggle");
+});
+%}
+
+### DELETE /api/todos/{id} - delete todo
+DELETE {{baseUrl}}/api/todos/{{todoId}}
+Accept: application/json
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("delete response confirms removal", function () {
+    client.assert(response.body.removed === true, "Expected removed true");
+});
+%}
+
+### POST /api/todos - create completed todo for delete completed test
+POST {{baseUrl}}/api/todos
+Content-Type: application/json
+Accept: application/json
+
+{
+    "title": "IntelliJ completed todo",
+    "description": "Created to test delete completed endpoint",
+    "completed": true,
+    "priority": "LOW",
+    "category": "IntelliJ"
+}
+
+> {%
+client.test("status is 201", function () {
+    client.assert(response.status === 201, "Expected 201, got " + response.status);
+});
+
+client.global.set("completedTodoId", String(response.body.id));
+
+client.test("completed todo is created", function () {
+    client.assert(typeof response.body.id === "number", "Expected numeric id");
+    client.assert(response.body.completed === true, "Expected completed true");
+});
+%}
+
+### DELETE /api/todos/completed - delete completed todos
+DELETE {{baseUrl}}/api/todos/completed
+Accept: application/json
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("removed count is returned", function () {
+    client.assert(typeof response.body.removedCount === "number", "Expected numeric removedCount");
+    client.assert(response.body.removedCount >= 1, "Expected at least one completed todo removed");
+});
+%}
+
+### POST /api/todos - create todo before clear test
+POST {{baseUrl}}/api/todos
+Content-Type: application/json
+Accept: application/json
+
+{
+    "title": "IntelliJ clear todo",
+    "description": "Created to test clear endpoint",
+    "completed": false,
+    "priority": "MEDIUM",
+    "category": "IntelliJ"
+}
+
+> {%
+client.test("status is 201", function () {
+    client.assert(response.status === 201, "Expected 201, got " + response.status);
+});
+
+client.global.set("clearTodoId", String(response.body.id));
+
+client.test("todo for clear test is created", function () {
+    client.assert(typeof response.body.id === "number", "Expected numeric id");
+    client.assert(response.body.completed === false, "Expected completed false");
+});
+%}
+
+### DELETE /api/todos - clear all todos
+DELETE {{baseUrl}}/api/todos
+Accept: application/json
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("clear response returns removed count", function () {
+    client.assert(typeof response.body.removedCount === "number", "Expected numeric removedCount");
+    client.assert(response.body.removedCount >= 1, "Expected at least one todo removed");
+});
+%}
+
+### GET /api/todos - list after clear
+GET {{baseUrl}}/api/todos
+Accept: application/json
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("todo list is empty after clear", function () {
+    client.assert(Array.isArray(response.body), "Expected response body to be an array");
+    client.assert(response.body.length === 0, "Expected empty todo list");
+});
+%}
+
+### POST /api/todos - validation errors
+POST {{baseUrl}}/api/todos
+Content-Type: application/json
+Accept: application/json
+
+{
+    "title": "   ",
+    "priority": null
+}
+
+> {%
+client.test("status is 400", function () {
+    client.assert(response.status === 400, "Expected 400, got " + response.status);
+});
+
+client.test("validation error response has expected shape", function () {
+    client.assert(response.body.status === 400, "Expected status 400 in body");
+    client.assert(response.body.message === "Request validation failed", "Expected validation message");
+    client.assert(response.body.validationErrors.title !== undefined, "Expected title validation error");
+    client.assert(response.body.validationErrors.priority !== undefined, "Expected priority validation error");
+});
+%}
+
+### GET /api/todos/{id} - not found
+GET {{baseUrl}}/api/todos/{{notFoundId}}
+Accept: application/json
+
+> {%
+client.test("status is 404", function () {
+    client.assert(response.status === 404, "Expected 404, got " + response.status);
+});
+
+client.test("not found error response has expected shape", function () {
+    client.assert(response.body.status === 404, "Expected status 404 in body");
+    client.assert(response.body.message.indexOf("Todo with id 999999 was not found") >= 0, "Expected not found message");
+});
+%}
