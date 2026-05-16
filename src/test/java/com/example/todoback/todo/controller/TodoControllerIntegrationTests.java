@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -26,9 +28,13 @@ class TodoControllerIntegrationTests {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @Test
     void getAllReturnsInitialTodos() throws Exception {
-        mockMvc.perform(get("/api/todos"))
+        mockMvc.perform(get("/api/todos")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(5)))
                 .andExpect(jsonPath("$[0].id").value(1))
@@ -39,8 +45,16 @@ class TodoControllerIntegrationTests {
     }
 
     @Test
+    void getAllRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/todos"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Authentication is required"));
+    }
+
+    @Test
     void createReturnsCreatedTodoAfterSeedData() throws Exception {
         mockMvc.perform(post("/api/todos")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -61,6 +75,7 @@ class TodoControllerIntegrationTests {
     @Test
     void patchUpdatesTodo() throws Exception {
         mockMvc.perform(patch("/api/todos/1")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -80,11 +95,15 @@ class TodoControllerIntegrationTests {
 
     @Test
     void deleteCompletedReturnsRemovedCount() throws Exception {
-        mockMvc.perform(delete("/api/todos/completed"))
+        String token = bearerToken();
+
+        mockMvc.perform(delete("/api/todos/completed")
+                        .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.removedCount").value(1));
 
-        mockMvc.perform(get("/api/todos"))
+        mockMvc.perform(get("/api/todos")
+                        .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(4)));
     }
@@ -92,6 +111,7 @@ class TodoControllerIntegrationTests {
     @Test
     void invalidCreateReturnsValidationErrors() throws Exception {
         mockMvc.perform(post("/api/todos")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -107,8 +127,27 @@ class TodoControllerIntegrationTests {
 
     @Test
     void unknownTodoReturnsNotFound() throws Exception {
-        mockMvc.perform(get("/api/todos/999"))
+        mockMvc.perform(get("/api/todos/999")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Todo with id 999 was not found"));
+    }
+
+    private String bearerToken() throws Exception {
+        String response = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "user",
+                                  "password": "1234"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode body = objectMapper.readTree(response);
+        return "Bearer " + body.get("token").asText();
     }
 }

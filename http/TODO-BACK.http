@@ -1,12 +1,39 @@
 @baseUrl = http://localhost:8080
+@username = user
+@password = 1234
 @notFoundId = 999999
+@todoId = 1
 
 # Run this file from top to bottom with IntelliJ HTTP Client.
 # Warning: the last DELETE requests remove todos from the local H2 database.
 
+### POST /api/auth/login - get JWT token
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+    "username": "{{username}}",
+    "password": "{{password}}"
+}
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("jwt token is returned", function () {
+    client.assert(typeof response.body.token === "string", "Expected token");
+    client.assert(response.body.tokenType === "Bearer", "Expected Bearer token type");
+});
+
+client.global.set("authToken", response.body.token);
+%}
+
 ### GET /api/todos - list todos
 GET {{baseUrl}}/api/todos
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 > {%
 client.test("status is 200", function () {
@@ -36,6 +63,7 @@ client.test("todo items expose expected fields", function () {
 POST {{baseUrl}}/api/todos
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 {
     "title": "IntelliJ todo",
@@ -70,6 +98,7 @@ client.test("location header points to created todo", function () {
 ### GET /api/todos/{id} - get created todo
 GET {{baseUrl}}/api/todos/{{todoId}}
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 > {%
 client.test("status is 200", function () {
@@ -86,6 +115,7 @@ client.test("response matches requested id", function () {
 PATCH {{baseUrl}}/api/todos/{{todoId}}
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 {
     "title": "IntelliJ todo updated",
@@ -115,6 +145,7 @@ client.test("todo fields are updated", function () {
 PATCH {{baseUrl}}/api/todos/{{todoId}}/completed
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 {
     "completed": true
@@ -134,6 +165,7 @@ client.test("completed is true", function () {
 ### PATCH /api/todos/{id}/toggle - toggle completed
 PATCH {{baseUrl}}/api/todos/{{todoId}}/toggle
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 > {%
 client.test("status is 200", function () {
@@ -149,6 +181,7 @@ client.test("completed is toggled to false", function () {
 ### DELETE /api/todos/{id} - delete todo
 DELETE {{baseUrl}}/api/todos/{{todoId}}
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 > {%
 client.test("status is 200", function () {
@@ -164,6 +197,7 @@ client.test("delete response confirms removal", function () {
 POST {{baseUrl}}/api/todos
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 {
     "title": "IntelliJ completed todo",
@@ -189,6 +223,7 @@ client.test("completed todo is created", function () {
 ### DELETE /api/todos/completed - delete completed todos
 DELETE {{baseUrl}}/api/todos/completed
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 > {%
 client.test("status is 200", function () {
@@ -205,6 +240,7 @@ client.test("removed count is returned", function () {
 POST {{baseUrl}}/api/todos
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 {
     "title": "IntelliJ clear todo",
@@ -230,6 +266,7 @@ client.test("todo for clear test is created", function () {
 ### DELETE /api/todos - clear all todos
 DELETE {{baseUrl}}/api/todos
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 > {%
 client.test("status is 200", function () {
@@ -245,6 +282,7 @@ client.test("clear response returns removed count", function () {
 ### GET /api/todos - list after clear
 GET {{baseUrl}}/api/todos
 Accept: application/json
+Authorization: Bearer {{authToken}}
 
 > {%
 client.test("status is 200", function () {
@@ -254,6 +292,21 @@ client.test("status is 200", function () {
 client.test("todo list is empty after clear", function () {
     client.assert(Array.isArray(response.body), "Expected response body to be an array");
     client.assert(response.body.length === 0, "Expected empty todo list");
+});
+%}
+
+### POST /api/auth/logout - revoke JWT token
+POST {{baseUrl}}/api/auth/logout
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+> {%
+client.test("status is 200", function () {
+    client.assert(response.status === 200, "Expected 200, got " + response.status);
+});
+
+client.test("logout confirms token revocation", function () {
+    client.assert(response.body.loggedOut === true, "Expected loggedOut true");
 });
 %}
 
