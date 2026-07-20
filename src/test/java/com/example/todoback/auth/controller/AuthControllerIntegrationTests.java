@@ -63,6 +63,16 @@ class AuthControllerIntegrationTests {
     }
 
     @Test
+    void openApiDocsArePublic() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.openapi").exists())
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
+                .andExpect(jsonPath("$.paths['/api/auth/login'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/todos'].get").exists());
+    }
+
+    @Test
     void logoutRevokesCurrentToken() throws Exception {
         String token = bearerToken();
 
